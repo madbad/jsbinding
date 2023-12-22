@@ -9,14 +9,14 @@
   <body>
 
 <div>
-	<span data-bind="enabled">Nome gioco: {{game.name}}</span>
-  <br><span data-bind="enabled">Cognome: {{game.test.cognome}}</span>
-  <br><span data-bind="enabled">Nome: {{game.test.nome}}</span>
+	<span data-bind="true">Nome gioco: {{game.name}}</span>
+  <br><span data-bind="true">Cognome: {{game.test.cognome}}</span>
+  <br><span data-bind="true">Nome: {{game.test.nome}}</span>
 
-  <br><input data-bind="enabled" value="{{game.test.nome}}"> <label>Nome</label>
-  <br><input data-bind="enabled" value="{{game.test.cognome}}"> <label>Cognome</label>
-	<br><input data-bind="enabled" value="{{game.test.cognome}} */ {{game.test.nome}}" disabled>
-	<br><input data-bind="enabled" value="{{game.test.cognome}}{{game.test.cognome}}{{game.test.nome}}" disabled>
+  <br><input data-bind="true" value="{{game.test.nome}}"> <label>Nome</label>
+  <br><input data-bind="true" value="{{game.test.cognome}}"> <label>Cognome</label>
+	<br><input data-bind="true" value="{{game.test.cognome}} */ {{game.test.nome}}" disabled>
+	<br><input data-bind="true" value="{{game.test.cognome}}{{game.test.cognome}}{{game.test.nome}}" disabled>
 
  <hr>
   Quick inventory:
@@ -25,7 +25,7 @@
     <br><span>{{item.name}}</span> ||
     <span>{{item.val}}</span> ||
     <span>{{item.quantity}}</span> ||
-    <span data-bind="enabled">{{game.test.cognome}}</span>
+    <span data-bind="true">{{game.test.cognome}}</span>
   </span>
  
 <hr>   
@@ -36,14 +36,14 @@
     <td>{{item.name}}</td>
     <td>{{item.val}}</td>
     <td>{{item.quantity}}</td>
-    <td data-bind="enabled">{{game.test.cognome}}</td>
+    <td data-bind="true">{{game.test.cognome}}</td>
     </tr>
   </table>
 <hr>  
   
   <select data-bind-foreach="{{game.inventory.backpack}}" data-bind-as="{{item}}">
     <option>
-   <!--<input data-bind="enabled" value="">-->
+   <!--<input data-bind="true" value="">-->
     {{item.name}}
     {{item.val}}
     {{item.quantity}}
