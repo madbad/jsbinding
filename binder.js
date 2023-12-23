@@ -1,3 +1,76 @@
+proxyHandler = {
+	set: function (target, key, value) {
+		console.log('Updating proxy: target,key,value...',target, key, value);
+		//assign the new value to our main object
+		target[key] = value;
+		//remember that we already have a proxy for the next time
+		//send updates the the elements that registered to us
+		if(!target.hasOwnProperty('__binds')){return};
+		if(!target.__binds.hasOwnProperty(key)){return};
+		for (var i =0; i< target.__binds[key].length; i++){
+			console.log('OBJ changed... we need to update the html elements binded to it', target.__binds[key][i]);
+			var htmlItem = target.__binds[key][i].targetHtmlElement;;
+			var htmlItemAttribute = target.__binds[key][i].targetHtmlElementAttribute;
+			
+			//restore the original string in the html element (the one before the tags replacing)
+			htmlItem[htmlItemAttribute] = htmlItem.dataset['originalval'+htmlItemAttribute];
+			
+			//replace the tags with the new values
+			replaceTags(htmlItem, htmlItem.dataset['originalval'+htmlItemAttribute])
+		}
+		return true; 
+	},
+	get(target, property) {
+		// Intercept property access
+		if (property === 'bindToHtmlElement') {
+			// Add a new method to the proxy
+			return function(propertyName, htmlElement, htmlElementAttribute) {
+				console.log(`We are binding ${propertyName} to ${htmlElement} attribute ${htmlElementAttribute}`);
+				
+				if(!target.hasOwnProperty('__binds')){
+					console.log(`Target had no binds yet, fixing it!`);
+					target.__binds = [];
+				};
+				if(!target.__binds.hasOwnProperty(propertyName)){
+					console.log(`Target had no binds for this property yet, fixing it!`);
+					target.__binds[propertyName] = [];
+				};
+					
+				//if not already stored (we only want to store it the first time to prevent some string already been replaced)
+				//remember the original value of the html attribute
+				console.log('bool: originalval'+htmlElementAttribute);
+				//console.log('bool: ', htmlElement.hasAttribute('originalval'+htmlElementAttribute));
+				console.log('bool: ', (!(('originalval'+htmlElementAttribute) in htmlElement.dataset)));
+				//if(!htmlElement.hasAttribute('originalval'+htmlElementAttribute)){
+				if(!(('originalval'+htmlElementAttribute) in htmlElement.dataset)){
+					htmlElement.dataset['originalval'+htmlElementAttribute] = htmlElement[htmlElementAttribute];
+					console.log(htmlElement);
+				}
+				//register the html elements as one that will receive updates from us
+				target.__binds[propertyName].push({
+					targetHtmlElement: htmlElement,
+					targetHtmlElementAttribute: htmlElementAttribute,
+					targetHtmlOriginalValue: htmlElement[htmlElementAttribute]
+				});
+				
+				//bind
+				//htmlElement[htmlElementAttribute]=target[propertyName];
+				replaceTags(htmlElement, htmlElement.dataset['originalval'+htmlElementAttribute])
+				
+				//bind back
+				htmlElement.addEventListener('keyup', (event) => {
+					console.log('html changed, firing the event back to the original js obj (obj, property, newvalue)', target, propertyName, htmlElement[htmlElementAttribute]);
+					this[propertyName] = htmlElement[htmlElementAttribute];
+				});
+
+			};
+		}
+		return target[property];
+	},
+}
+
+
+
 //scorro l'html e cerco se c'è qualche elemento che ha un bind (cerco nell'innerHtml e in value)
 //se un elemento richiede di essere bindato ad una o più proprieta di un oggetto
 //per ogni proprietà/oggetto
@@ -14,28 +87,28 @@
 
 //aggiorno in real time or only every x ammount of time?
 
-var __bindings={};
- __bindings.html=[]; //contains a list of html elements that has bindings
-						//for each html element
-						//a list of js binded property (pointer to js object)
-						//the original html
-__bindings.js=[]; //contains a list of js elements that has bindings
-						//for each js element (pointer to html element)
 
-
-var game = {};
+var game = new Proxy({},proxyHandler);
 game.name='Primo Gioco1';
-game.test={};
+game.test= new Proxy({},proxyHandler);;
 game.test.nome='Gionni';
 game.test.cognome='Brun';
 game.test.eta='24';
-game.inventory = {};
-game.inventory.quick= Array({name:'mela',val:10,quantity:1}, {name:'pera',val:10,quantity:1}, {name:'banan',val:10,quantity:1}, {name:'caffe',val:10,quantity:1});
-game.inventory.backpack= Array({name:'libro',val:10,quantity:1}, {name:'chiave',val:10,quantity:2}, {name:'bottiglia',val:10,quantity:3}, {name:'cerotto',val:10,quantity:1});
+game.inventory = new Proxy({},proxyHandler);
+game.inventory.quick= Array(
+	new Proxy({name:'mela',val:10,quantity:1},proxyHandler),
+	new Proxy({name:'pera',val:10,quantity:1},proxyHandler),
+	new Proxy({name:'banan',val:10,quantity:1},proxyHandler),
+	new Proxy({name:'caffe',val:10,quantity:1},proxyHandler)
+);
+game.inventory.backpack= Array(
+	new Proxy({name:'libro',val:10,quantity:1},proxyHandler),
+	new Proxy({name:'chiave',val:10,quantity:2},proxyHandler),
+	new Proxy({name:'bottiglia',val:10,quantity:3},proxyHandler),
+	new Proxy({name:'cerotto',val:10,quantity:1},proxyHandler)
+);
 
-
-console.log("test");
-
+/*
 function set(path, value) {
 	var schema = window;  // a moving reference to internal objects within obj
 	var pList = path.split('.');
@@ -47,153 +120,8 @@ function set(path, value) {
 		}
 	schema[pList[len-1]] = value;
 }
+*/
 
-
-//binding of a single value
-//find all html elements that want to bind (register) to some object
-var bindedHtmlElements = document.querySelectorAll('[data-bind]');
-for (let htmlElement of bindedHtmlElements) {
-	console.log('Found an HTML element that want to bind: ', htmlElement);
-
-	var attributesToCheck =['value', 'innerHTML'];
-
-	//for each attribute of this html element that cotain a binding to an object
-	attributesToCheck.forEach(function(attribute){
-		//if the item does not have an attribute continue with the next property
-		if(attribute=='value'){
-			if( !htmlElement.hasAttribute('value')){
-				return;
-			}
-		}
-
-		//find possible binds in value (find the tags)
-		const regex = /{{(.*?)}}/gm;
-		var binds = htmlElement[attribute].matchAll(regex);
-
-		//for each binded HTML property (for each tag found)
-		for (const bind of binds) {
-			console.log('     want to bin his property: ', attribute);
-				console.log('     to: ', bind[1]);
-
-
-			//se ho trovato almeno un tag mi ricordo la string originale (prima di rimbpiazzare i tag)
-			if (!htmlElement.hasAttribute('bindOriginalval'+attribute)){
-				htmlElement.dataset['bindOriginalval'+attribute] = htmlElement[attribute];
-				//htmlElement.dataset['aaaaaaaaaaaaaaaaaaaaaaaaaaaaa'] = 'test';
-			}
-
-
-			//get the sub property
-			var subProp = bind[0].replace('{{','').replace('}}','').split('.'); 
-			//find the global object that contain our property (we will need it for attacching the proxy)
-			var currentObjState = window;
-			var parentObj = window
-			var propName = null;
-			for (var i = 0; i < subProp.length; i++) {
-				parentObj = currentObjState;
-				propName = subProp[i];
-				currentObjState = currentObjState[subProp[i]];
-			}
-			bindedObject = parentObj;
-
-		  //remove the {{, the }}, and split by .
-			var jsProperty = bind[0].replace('{{','').replace('}}','').split('.'); 
-			
-			//if the object is a proxy
-			if(parentObj.hasOwnProperty('_isProxy')){
-				console.log('######', bind[1], " is already a proxy");
-				var watchedProperty = subProp.pop();
-			}else{
-				console.log('    ', bind[1], " is not a proxy");
-				console.log('     registering a new proxy for ', bind[1], " with current value of ", eval(bind[1]))
-				
-				//we wanto to register to it as "targets" so that when it will change we will change
-				parentObjProxy = new Proxy(parentObj, {
-								  //obj ,prop, value
-					//remember that we already setup a proxy for this object
-					set: function (target, key, value) {
-						console.log('Updating proxy: target,key,value...',target, key, value);
-						//assign the new value to our main object
-						target[key] = value;
-						//remember that we already have a proxy for the next time
-						
-						console.log('this js property is mapped to these html elements...',target._binds[key]);
-						
-						//for each html element that we have previously ergistered as binded to "us"
-						//update his value with our new value
-						
-						//if we have no binds we have nothign to do here, quit
-						if(!target.hasOwnProperty('_binds')){return};
-						if(target._binds.hasOwnProperty(key)){
-							//for each html element that is "registered to us"
-							for (var i =0; i< target._binds[key].length; i++){
-								console.log('OBJ changed... we need to update the html elements binded to it');
-								var htmlItem = target._binds[key][i].htmlItem;;
-								var htmlItemAttribute = target._binds[key][i].htmlItemAttribute;
-								
-								//restore the original string (the raw sring before we run the bindings proprety changes)
-								htmlItem[htmlItemAttribute] = htmlItem.dataset['bindOriginalval'+htmlItemAttribute];
-								//replace the tags with our values
-								replaceTags(htmlItem, htmlItem.dataset['bindOriginalval'+htmlItemAttribute])
-							}
-						}
-						return true; 
-					},
-				});
-				
-				//replace the obj with our proxy
-				//remove the last piece
-				var watchedProperty = subProp.pop();
-				console.log(parentObj);
-				parentObj._isProxy =true;
-				console.log(parentObj);
-				console.log(parentObjProxy);
-				parentObj = parentObjProxy;
-				//eval(bind[1]+'=parentObjProxy;')
-				//console.log(eval(bind[1]));
-				console.log('myproxy ',parentObjProxy);
-			}
-
-
-			
-			//the proxy is already setup so
-			//assign in the obj a reference of this bind
-			if (!parentObj.hasOwnProperty('_binds')){
-				parentObj._binds = {};
-			}
-			if (!parentObj._binds.hasOwnProperty(watchedProperty)){
-				parentObj._binds[watchedProperty] = [];
-			}
-
-			parentObj._binds[watchedProperty].push({
-				htmlItem: htmlElement,
-				htmlItemAttribute:[attribute],
-				htmlOriginalValue: htmlElement[attribute],
-				objProperty: watchedProperty,
-				objFullName: subProp.join('.')+'.'+watchedProperty
-			})
-
-
-
-			//actual string replacements (this could be done later)
-			
-			//assign the value to the bind 
-			htmlElement[attribute] = htmlElement[attribute].replaceAll(bind[0], currentObjState)
-			//two way bindings
-			//bind the html to the obj
-			console.log('      registering an event listener to the html element for ', bind[1]);
-
-			htmlElement.addEventListener('keyup', (event) => {
-				console.log('html changed, firing the event back to the original js obj (obj, property, newvalue)', parentObj, propName, event.target.value);
-				parentObj[propName] = event.target.value;
-				parentObjProxy[propName] = event.target.value;
-			});
-		}
-	});
-
- 
-
-}
 function replaceTag (tag, target, targetAttribute){
 	//remove the {{, the }}, and split by .
 	var subProp = tag.replace('{{','').replace('}}','').split('.'); 
@@ -273,3 +201,62 @@ for (let item of arrayBind) {
 	}
   item.innerHTML = newHtml;
 }
+
+
+
+
+//binding of a single value
+//find all html elements that want to bind (register) to some object
+
+var htmlElementsWithBindings = document.querySelectorAll('[data-bind]');
+for (let htmlElement of htmlElementsWithBindings) {
+	console.log('Found an HTML element that want to bind: ', htmlElement);
+	var attributesToCheck =['value', 'innerHTML'];
+
+	//go trought the html attributes that we want to check for bindings
+	attributesToCheck.forEach(function(htmlAttribute){
+		//if the item does not have an attribute continue with the next property
+		if(htmlAttribute=='value'){
+			if( !htmlElement.hasAttribute('value')){
+				return;
+			}
+		}
+
+		//search for tags in this attribute
+		const regex = /{{(.*?)}}/gm;
+		var binds = htmlElement[htmlAttribute].matchAll(regex);
+
+		//for each tag/binding we found in this attribute
+		for (const bind of binds) {
+			console.log('     want to bin his property: ', htmlAttribute);
+			console.log('     to: ', bind[1]);
+			//get the sub property
+			var subProp = bind[0].replace('{{','').replace('}}','').split('.'); 
+
+			var currentObjState = window;
+			var parentObj = window
+			var propName = null;
+			for (var i = 0; i < subProp.length; i++) {
+				parentObj = currentObjState;
+				propName = subProp[i];
+				currentObjState = currentObjState[subProp[i]];
+			}
+			
+			//manual bind
+			parentObj.bindToHtmlElement(propName,htmlElement,htmlAttribute)
+
+//		  //remove the {{, the }}, and split by .
+//			var jsProperty = bind[0].replace('{{','').replace('}}','').split('.'); 
+
+		}
+	});
+}
+
+
+
+
+
+//manual bind
+//game.bindToHtmlElement('name',document.getElementById('nameInput'),'value')
+
+
